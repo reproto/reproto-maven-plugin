@@ -59,7 +59,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
   private ArtifactRepository localRepository;
 
   @Parameter(required = true, readonly = true,
-    defaultValue = "${project.remoteArtifactRepositories}")
+      defaultValue = "${project.remoteArtifactRepositories}")
   private List<ArtifactRepository> remoteRepositories;
 
   /**
@@ -78,7 +78,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
    * Package prefix to use when generating packages.
    */
   @Parameter(required = false, property = "reproto.packagePrefix",
-    defaultValue = "${project.groupId}")
+      defaultValue = "${project.groupId}")
   private String packagePrefix;
 
   /**
@@ -138,19 +138,25 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
 
     if (this.reprotoExecutable != null) {
       executable = Paths.get(this.reprotoExecutable);
+
+      if (!Files.isExecutable(executable)) {
+        throw new IllegalArgumentException(
+            "`-D reproto.executable` is not an executable: " + executable);
+      }
     }
 
     if (executable == null && reprotoArtifact != null) {
       final Artifact artifact = createDependencyArtifact(reprotoArtifact);
       executable = resolveBinaryArtifact(artifact);
+
+      if (!Files.isExecutable(executable)) {
+        throw new IllegalArgumentException(
+            "`-D reproto.artifact` is not executable: " + executable);
+      }
     }
 
     if (executable == null) {
       executable = Paths.get(DEFAULT_EXECUTABLE);
-    }
-
-    if (!Files.isExecutable(executable)) {
-      throw new IllegalArgumentException("Expected executable, but was not: " + executable);
     }
 
     final Reproto.Builder reproto = new Reproto.Builder(executable, getOutputDirectory());
@@ -180,13 +186,13 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
   }
 
   private Artifact createDependencyArtifact(
-    final String groupId, final String artifactId, final String version, final String type,
-    final String classifier
+      final String groupId, final String artifactId, final String version, final String type,
+      final String classifier
   ) throws Exception {
     final VersionRange versionSpec = VersionRange.createFromVersionSpec(version);
 
     return artifactFactory.createDependencyArtifact(groupId, artifactId, versionSpec, type,
-      classifier, Artifact.SCOPE_RUNTIME);
+        classifier, Artifact.SCOPE_RUNTIME);
   }
 
   private Artifact createDependencyArtifact(final String artifactSpec) throws Exception {
@@ -194,7 +200,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
 
     if (parts.length < 3 || parts.length > 5) {
       throw new IllegalArgumentException("Invalid artifact specification (" + artifactSpec + "), " +
-        "expected: groupId:artifactId:version[:type[:classifier]]");
+          "expected: groupId:artifactId:version[:type[:classifier]]");
     }
 
     final String type = parts.length >= 4 ? parts[3] : "exe";
@@ -206,18 +212,18 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     final ArtifactResolutionResult result;
 
     final ArtifactResolutionRequest request = new ArtifactResolutionRequest()
-      .setArtifact(project.getArtifact())
-      .setResolveRoot(false)
-      .setResolveTransitively(false)
-      .setArtifactDependencies(Collections.singleton(artifact))
-      .setManagedVersionMap(Collections.emptyMap())
-      .setLocalRepository(localRepository)
-      .setRemoteRepositories(remoteRepositories)
-      .setOffline(session.isOffline())
-      .setForceUpdate(session.getRequest().isUpdateSnapshots())
-      .setServers(session.getRequest().getServers())
-      .setMirrors(session.getRequest().getMirrors())
-      .setProxies(session.getRequest().getProxies());
+        .setArtifact(project.getArtifact())
+        .setResolveRoot(false)
+        .setResolveTransitively(false)
+        .setArtifactDependencies(Collections.singleton(artifact))
+        .setManagedVersionMap(Collections.emptyMap())
+        .setLocalRepository(localRepository)
+        .setRemoteRepositories(remoteRepositories)
+        .setOffline(session.isOffline())
+        .setForceUpdate(session.getRequest().isUpdateSnapshots())
+        .setServers(session.getRequest().getServers())
+        .setMirrors(session.getRequest().getMirrors())
+        .setProxies(session.getRequest().getProxies());
 
     result = repositorySystem.resolve(request);
 

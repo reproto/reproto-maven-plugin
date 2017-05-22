@@ -15,13 +15,6 @@ if ! which reproto 2>&1 > /dev/null; then
     cargo install reproto
 fi
 
-exe=$(realpath $reproto/target/release/reproto)
-
-if [[ ! -x $exe ]]; then
-    echo "Not an executable: $exe"
-    exit 1
-fi
-
 echo "Installing Plugin"
 mvn -q install
 
@@ -29,7 +22,7 @@ for dir in $PWD/examples/*; do
     pushd $dir
 
     echo "Building: $dir"
-    mvn -q clean package -D reproto.executable=$exe
+    mvn -q clean package
     mvn -q dependency:build-classpath -D mdep.outputFile=target/classpath
 
     classpath=$(cat target/classpath):target/classes

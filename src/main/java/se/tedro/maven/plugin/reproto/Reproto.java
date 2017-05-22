@@ -26,10 +26,10 @@ public class Reproto {
 
     final Commandline command = new Commandline();
 
-    command.setExecutable(executable.toAbsolutePath().toString());
+    command.setExecutable(executable.toString());
     command.addArguments(arguments());
 
-    final int result = CommandLineUtils.executeCommandLine(command, null, output, error);
+    final int status = CommandLineUtils.executeCommandLine(command, null, output, error);
 
     for (final String line : output.lines) {
       log.info("reproto: " + line);
@@ -39,8 +39,8 @@ public class Reproto {
       log.error("reproto: " + line);
     }
 
-    if (result != 0) {
-      throw new RuntimeException(executable + ": exited with non-zero status");
+    if (status != 0) {
+      throw new RuntimeException(executable + ": exited with non-zero status (" + status + ")");
     }
   }
 
@@ -109,7 +109,7 @@ public class Reproto {
 
     public Reproto build() {
       return new Reproto(executable, out, new ArrayList<>(paths), new ArrayList<>(modules),
-        new ArrayList<>(targets), packagePrefix);
+          new ArrayList<>(targets), packagePrefix);
     }
   }
 
