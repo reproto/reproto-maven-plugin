@@ -19,6 +19,9 @@ You can run examples with the provided [`run-examples.sh`](run-examples.sh) scri
         <extensions>true</extensions>
 
         <configuration>
+          <modules>
+            <module>constructor_properties</module>
+          </modules>
           <targets>
             <target>heroic.v1</target>
           </targets>
