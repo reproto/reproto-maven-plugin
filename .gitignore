@@ -1,0 +1,6 @@
+!/.idea/codeStyleSettings.xml
+/.idea
+*.iml
+/target
+/examples/*/.idea
+/examples/*/target
