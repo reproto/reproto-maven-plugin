@@ -26,6 +26,8 @@ import org.codehaus.plexus.util.StringUtils;
 import org.sonatype.plexus.build.incremental.BuildContext;
 
 public abstract class AbstractReprotoMojo extends AbstractMojo {
+  public static final String DEFAULT_EXECUTABLE = "reproto";
+
   @Parameter(defaultValue = "${project}", readonly = true)
   private MavenProject project;
 
@@ -144,13 +146,11 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     }
 
     if (executable == null) {
-      throw new IllegalArgumentException(
-        "Could not find a reproto executable. Specify either `-Dreproto.executable=<path>` or " +
-          "`-Dreproto.artifactId=<artifact>`");
+      executable = Paths.get(DEFAULT_EXECUTABLE);
     }
 
     if (!Files.isExecutable(executable)) {
-      throw new IllegalArgumentException("Not executable: " + executable);
+      throw new IllegalArgumentException("Expected executable, but was not: " + executable);
     }
 
     final Reproto.Builder reproto = new Reproto.Builder(executable, getOutputDirectory());

@@ -10,7 +10,10 @@ if [[ ! -d $reproto ]]; then
     exit 1
 fi
 
-(cd $reproto && cargo build --release)
+if ! which reproto 2>&1 > /dev/null; then
+    echo "Installing reproto using `cargo install reproto`:"
+    cargo install reproto
+fi
 
 exe=$(realpath $reproto/target/release/reproto)
 
