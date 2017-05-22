@@ -154,7 +154,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     Path executable = null;
 
     if (this.reprotoExecutable != null) {
-      executable = Paths.get(this.reprotoExecutable);
+      executable = Paths.get(this.reprotoExecutable).toAbsolutePath();
 
       if (!Files.isExecutable(executable)) {
         throw new IllegalArgumentException(
