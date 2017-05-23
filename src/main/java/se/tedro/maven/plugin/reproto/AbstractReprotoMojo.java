@@ -1,12 +1,20 @@
 package se.tedro.maven.plugin.reproto;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
+import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.repository.ArtifactRepository;
@@ -27,6 +35,9 @@ import org.sonatype.plexus.build.incremental.BuildContext;
 
 public abstract class AbstractReprotoMojo extends AbstractMojo {
   public static final String DEFAULT_EXECUTABLE = "reproto";
+  public static final String DEFAULT_REPROTO_DOWNLOAD_URL =
+      "https://github.com/reproto/reproto/releases/download";
+  public static final String DEFAULT_REPROTO_DOWNLOAD_VERSION = "0.0.1";
 
   @Parameter(defaultValue = "${project}", readonly = true)
   private MavenProject project;
@@ -54,6 +65,12 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
 
   @Parameter(required = false, property = "reproto.artifact")
   private String reprotoArtifact;
+
+  @Parameter(required = false, property = "reproto.downloadUrl")
+  private String reprotoDownloadUrl = DEFAULT_REPROTO_DOWNLOAD_URL;
+
+  @Parameter(required = false, property = "reproto.downloadVersion")
+  private String reprotoDownloadVersion = DEFAULT_REPROTO_DOWNLOAD_VERSION;
 
   @Parameter(required = true, readonly = true, property = "localRepository")
   private ArtifactRepository localRepository;
@@ -156,6 +173,10 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     }
 
     if (executable == null) {
+      executable = resolveDownloadUrl();
+    }
+
+    if (executable == null) {
       executable = Paths.get(DEFAULT_EXECUTABLE);
     }
 
@@ -206,6 +227,185 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     final String type = parts.length >= 4 ? parts[3] : "exe";
     final String classifier = parts.length == 5 ? parts[4] : null;
     return createDependencyArtifact(parts[0], parts[1], parts[2], type, classifier);
+  }
+
+  private Path resolveDownloadUrl() throws Exception {
+    final String url = this.reprotoDownloadUrl;
+    final String version = this.reprotoDownloadVersion;
+
+    final Path pluginsDirectory = reprotoPluginsDirectory.toPath();
+    final Path expectedFile = pluginsDirectory.resolve(DEFAULT_EXECUTABLE);
+
+    if (url == null || StringUtils.isBlank(url)) {
+      return null;
+    }
+
+    if (version == null || StringUtils.isBlank(version)) {
+      return null;
+    }
+
+    if (!Files.isDirectory(pluginsDirectory)) {
+      getLog().info("Creating directory: " + pluginsDirectory);
+      Files.createDirectories(pluginsDirectory);
+    }
+
+    // file already exists
+    if (Files.isExecutable(expectedFile)) {
+      getLog().info("Using existing (cached) executable: " + expectedFile);
+      return expectedFile;
+    }
+
+    final String os = resolveOs();
+    final String arch = resolveArch();
+
+    if (os == null) {
+      return null;
+    }
+
+    if (arch == null) {
+      return null;
+    }
+
+    final String archive =
+        url + "/" + version + "/reproto-" + version + "-" + os + "-" + arch + ".zip";
+
+    getLog().info("Downloading archive: " + archive);
+
+    final URL u = new URL(archive);
+
+    final byte[] buffer = new byte[4096];
+
+    Path executable = null;
+
+    try (final ZipArchiveInputStream zip = new ZipArchiveInputStream(u.openStream())) {
+      ZipArchiveEntry entry;
+
+      while ((entry = zip.getNextZipEntry()) != null) {
+        final Path path = pluginsDirectory.resolve(entry.getName());
+
+        if (entry.isDirectory()) {
+          Files.createDirectory(path);
+          continue;
+        } else {
+          getLog().info("Extracting: " + path);
+
+          int remaining = (int) entry.getSize();
+
+          try (final OutputStream out = Files.newOutputStream(path,
+              StandardOpenOption.CREATE_NEW)) {
+            while (remaining > 0) {
+              int read = zip.read(buffer, 0, Math.min(buffer.length, remaining));
+
+              if (read <= 0) {
+                throw new IOException("failed to read file");
+              }
+
+              out.write(buffer, 0, read);
+              remaining -= read;
+            }
+          }
+        }
+
+        final int mode = entry.getUnixMode();
+
+        if (mode != 0) {
+          Files.setPosixFilePermissions(path, convertPermissions(entry.getUnixMode()));
+        }
+
+        if (path.equals(expectedFile)) {
+          final Set<PosixFilePermission> executableMode = new HashSet<>();
+          executableMode.add(PosixFilePermission.OWNER_EXECUTE);
+          executableMode.add(PosixFilePermission.GROUP_EXECUTE);
+          executableMode.add(PosixFilePermission.OTHERS_EXECUTE);
+
+          Files.setPosixFilePermissions(path, executableMode);
+          executable = path;
+        }
+      }
+    }
+
+    return executable;
+  }
+
+  /**
+   * Convert octal permissions to a set of PosixFilePermission suitable for Java APIs.
+   */
+  private Set<PosixFilePermission> convertPermissions(final int mode) {
+    final Set<PosixFilePermission> permissions = new HashSet<>();
+
+    if ((mode & 0100) != 0) {
+      permissions.add(PosixFilePermission.OWNER_EXECUTE);
+    }
+
+    if ((mode & 0200) != 0) {
+      permissions.add(PosixFilePermission.OWNER_WRITE);
+    }
+
+    if ((mode & 0400) != 0) {
+      permissions.add(PosixFilePermission.OWNER_READ);
+    }
+
+    if ((mode & 0010) != 0) {
+      permissions.add(PosixFilePermission.GROUP_EXECUTE);
+    }
+
+    if ((mode & 0020) != 0) {
+      permissions.add(PosixFilePermission.GROUP_WRITE);
+    }
+
+    if ((mode & 0040) != 0) {
+      permissions.add(PosixFilePermission.GROUP_READ);
+    }
+
+    if ((mode & 0001) != 0) {
+      permissions.add(PosixFilePermission.OTHERS_EXECUTE);
+    }
+
+    if ((mode & 0002) != 0) {
+      permissions.add(PosixFilePermission.OTHERS_WRITE);
+    }
+
+    if ((mode & 0004) != 0) {
+      permissions.add(PosixFilePermission.OTHERS_READ);
+    }
+
+    return permissions;
+  }
+
+  private String resolveOs() {
+    final String osName = System.getProperty("os.name");
+
+    if (osName.toLowerCase().contains("linux")) {
+      return "linux";
+    }
+
+    if (osName.toLowerCase().contains("mac")) {
+      return "osx";
+    }
+
+    if (osName.toLowerCase().contains("windows")) {
+      return "win";
+    }
+
+    return null;
+  }
+
+  private String resolveArch() {
+    final String osArch = System.getProperty("os.arch");
+
+    if ("x86_64".equals(osArch)) {
+      return "x86_64";
+    }
+
+    if ("amd64".equals(osArch)) {
+      return "x86_64";
+    }
+
+    if ("x86_32".equals(osArch)) {
+      return "x86_32";
+    }
+
+    return null;
   }
 
   private Path resolveBinaryArtifact(final Artifact artifact) throws Exception {
