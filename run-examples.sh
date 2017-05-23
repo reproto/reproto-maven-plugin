@@ -22,7 +22,7 @@ for dir in $PWD/examples/*; do
     pushd $dir
 
     echo "Building: $dir"
-    mvn "$@" package
+    mvn -q "$@" clean package
     mvn -q dependency:build-classpath -D mdep.outputFile=target/classpath
 
     classpath=$(cat target/classpath):target/classes

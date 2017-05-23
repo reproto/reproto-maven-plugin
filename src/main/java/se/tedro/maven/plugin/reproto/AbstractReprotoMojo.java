@@ -2,6 +2,7 @@ package se.tedro.maven.plugin.reproto;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
 import java.nio.file.Files;
@@ -13,8 +14,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipArchiveInputStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.CompressorException;
+import org.apache.commons.compress.compressors.CompressorStreamFactory;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.factory.ArtifactFactory;
 import org.apache.maven.artifact.repository.ArtifactRepository;
@@ -61,16 +64,16 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
   private BuildContext buildContext;
 
   @Parameter(required = false, property = "reproto.executable")
-  private String reprotoExecutable;
+  private String executable;
 
   @Parameter(required = false, property = "reproto.artifact")
-  private String reprotoArtifact;
+  private String artifact;
 
   @Parameter(required = false, property = "reproto.downloadUrl")
-  private String reprotoDownloadUrl = DEFAULT_REPROTO_DOWNLOAD_URL;
+  private String downloadUrl = DEFAULT_REPROTO_DOWNLOAD_URL;
 
   @Parameter(required = false, property = "reproto.downloadVersion")
-  private String reprotoDownloadVersion = DEFAULT_REPROTO_DOWNLOAD_VERSION;
+  private String downloadVersion = DEFAULT_REPROTO_DOWNLOAD_VERSION;
 
   @Parameter(required = true, readonly = true, property = "localRepository")
   private ArtifactRepository localRepository;
@@ -89,7 +92,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
    * A directory where native launchers for java protoc plugins will be generated.
    */
   @Parameter(required = false, defaultValue = "${project.build.directory}/reproto-plugins")
-  private File reprotoPluginsDirectory;
+  private File pluginsDirectory;
 
   /**
    * Package prefix to use when generating packages.
@@ -153,8 +156,8 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
 
     Path executable = null;
 
-    if (this.reprotoExecutable != null) {
-      executable = Paths.get(this.reprotoExecutable).toAbsolutePath();
+    if (this.executable != null) {
+      executable = Paths.get(this.executable).toAbsolutePath();
 
       if (!Files.isExecutable(executable)) {
         throw new IllegalArgumentException(
@@ -162,8 +165,8 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
       }
     }
 
-    if (executable == null && reprotoArtifact != null) {
-      final Artifact artifact = createDependencyArtifact(reprotoArtifact);
+    if (executable == null && artifact != null) {
+      final Artifact artifact = createDependencyArtifact(this.artifact);
       executable = resolveBinaryArtifact(artifact);
 
       if (!Files.isExecutable(executable)) {
@@ -230,11 +233,19 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
   }
 
   private Path resolveDownloadUrl() throws Exception {
-    final String url = this.reprotoDownloadUrl;
-    final String version = this.reprotoDownloadVersion;
+    final String userHome = System.getProperty("user.home");
 
-    final Path pluginsDirectory = reprotoPluginsDirectory.toPath();
-    final Path expectedFile = pluginsDirectory.resolve(DEFAULT_EXECUTABLE);
+    if (userHome == null || StringUtils.isBlank(userHome)) {
+      throw new IllegalStateException("user.home: property not set");
+    }
+
+    final Path home = Paths.get(userHome);
+    final Path cacheDir = home.resolve(".cache").resolve("reproto-maven-plugin");
+
+    final String url = this.downloadUrl;
+    final String version = this.downloadVersion;
+
+    final Path pluginsDirectory = this.pluginsDirectory.toPath();
 
     if (url == null || StringUtils.isBlank(url)) {
       return null;
@@ -249,10 +260,12 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
       Files.createDirectories(pluginsDirectory);
     }
 
+    final Path executable = pluginsDirectory.resolve(DEFAULT_EXECUTABLE);
+
     // file already exists
-    if (Files.isExecutable(expectedFile)) {
-      getLog().info("Using existing (cached) executable: " + expectedFile);
-      return expectedFile;
+    if (Files.isExecutable(executable)) {
+      getLog().info("Using existing (cached) executable: " + executable);
+      return executable;
     }
 
     final String os = resolveOs();
@@ -266,22 +279,41 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
       return null;
     }
 
-    final String archive =
-        url + "/" + version + "/reproto-" + version + "-" + os + "-" + arch + ".zip";
+    final String archiveName = "reproto-" + version + "-" + os + "-" + arch + ".tar.gz";
 
-    getLog().info("Downloading archive: " + archive);
+    final String archive = url + "/" + version + "/" + archiveName;
 
-    final URL u = new URL(archive);
+    final Path cachedArchive = cacheDir.resolve(archiveName);
 
+    if (!Files.isRegularFile(cachedArchive)) {
+      downloadToCache(archive, cachedArchive);
+    }
+
+    extractArchive(cachedArchive, pluginsDirectory);
+
+    // file already exists
+    if (!Files.isExecutable(executable)) {
+      throw new IllegalArgumentException(
+          "Archive (" + cachedArchive + ") did not contain binary: " + executable);
+    }
+
+    return executable;
+  }
+
+  private void extractArchive(final Path source, final Path target)
+      throws IOException, CompressorException {
     final byte[] buffer = new byte[4096];
 
-    Path executable = null;
+    final CompressorStreamFactory factory = new CompressorStreamFactory();
 
-    try (final ZipArchiveInputStream zip = new ZipArchiveInputStream(u.openStream())) {
-      ZipArchiveEntry entry;
+    final InputStream in = Files.newInputStream(source);
+    final InputStream gz = factory.createCompressorInputStream(CompressorStreamFactory.GZIP, in);
 
-      while ((entry = zip.getNextZipEntry()) != null) {
-        final Path path = pluginsDirectory.resolve(entry.getName());
+    try (final TarArchiveInputStream tar = new TarArchiveInputStream(gz)) {
+      TarArchiveEntry entry;
+
+      while ((entry = tar.getNextTarEntry()) != null) {
+        final Path path = target.resolve(entry.getName());
 
         if (entry.isDirectory()) {
           Files.createDirectory(path);
@@ -291,10 +323,9 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
 
           int remaining = (int) entry.getSize();
 
-          try (final OutputStream out = Files.newOutputStream(path,
-              StandardOpenOption.CREATE_NEW)) {
+          try (final OutputStream out = Files.newOutputStream(path, StandardOpenOption.CREATE)) {
             while (remaining > 0) {
-              int read = zip.read(buffer, 0, Math.min(buffer.length, remaining));
+              int read = tar.read(buffer, 0, Math.min(buffer.length, remaining));
 
               if (read <= 0) {
                 throw new IOException("failed to read file");
@@ -306,25 +337,37 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
           }
         }
 
-        final int mode = entry.getUnixMode();
+        Files.setPosixFilePermissions(path, convertPermissions(entry.getMode()));
+      }
+    }
+  }
 
-        if (mode != 0) {
-          Files.setPosixFilePermissions(path, convertPermissions(entry.getUnixMode()));
-        }
+  private void downloadToCache(
+      final String archive, final Path cachedArchive
+  ) throws IOException {
+    final byte[] buffer = new byte[4096];
 
-        if (path.equals(expectedFile)) {
-          final Set<PosixFilePermission> executableMode = new HashSet<>();
-          executableMode.add(PosixFilePermission.OWNER_EXECUTE);
-          executableMode.add(PosixFilePermission.GROUP_EXECUTE);
-          executableMode.add(PosixFilePermission.OTHERS_EXECUTE);
+    if (!Files.isDirectory(cachedArchive.getParent())) {
+      Files.createDirectories(cachedArchive.getParent());
+    }
 
-          Files.setPosixFilePermissions(path, executableMode);
-          executable = path;
+    getLog().info("Downloading archive to cache: " + archive);
+    final URL u = new URL(archive);
+
+    try (final OutputStream out = Files.newOutputStream(cachedArchive,
+        StandardOpenOption.CREATE_NEW)) {
+      try (final InputStream in = u.openStream()) {
+        while (true) {
+          final int read = in.read(buffer);
+
+          if (read <= 0) {
+            break;
+          }
+
+          out.write(buffer, 0, read);
         }
       }
     }
-
-    return executable;
   }
 
   /**
@@ -441,7 +484,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
       getLog().debug("Resolved artifact: " + resolvedBinaryArtifact);
     }
 
-    final Path pluginsDirectory = reprotoPluginsDirectory.toPath();
+    final Path pluginsDirectory = this.pluginsDirectory.toPath();
 
     final Path sourceFile = resolvedBinaryArtifact.getFile().toPath();
     final Path targetFile = pluginsDirectory.resolve(sourceFile.getFileName());
