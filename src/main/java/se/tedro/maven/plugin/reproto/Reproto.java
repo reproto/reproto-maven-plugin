@@ -47,6 +47,8 @@ public class Reproto {
   public String[] arguments() {
     final List<String> result = new ArrayList<String>();
 
+    result.add("compile");
+
     result.add("--backend");
     result.add("java");
 
