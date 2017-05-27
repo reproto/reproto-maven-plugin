@@ -18,18 +18,10 @@ fi
 echo "Installing Plugin"
 mvn -q install
 
-for dir in $PWD/examples/*; do
+for dir in tests/*; do
     pushd $dir
-
-    echo "Building: $dir"
-    mvn -q "$@" clean package
-    mvn -q dependency:build-classpath -D mdep.outputFile=target/classpath
-
-    classpath=$(cat target/classpath):target/classes
-
-    echo "Running: $dir"
-    java -cp $classpath se.tedro.tests.App
-
+    echo "Testing: $dir"
+    mvn -q "$@" clean test
     popd
 done
 

@@ -40,7 +40,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
   public static final String DEFAULT_EXECUTABLE = "reproto";
   public static final String DEFAULT_REPROTO_DOWNLOAD_URL =
       "https://github.com/reproto/reproto/releases/download";
-  public static final String DEFAULT_REPROTO_DOWNLOAD_VERSION = "0.0.6";
+  public static final String DEFAULT_REPROTO_DOWNLOAD_VERSION = "0.0.7";
 
   @Parameter(defaultValue = "${project}", readonly = true)
   private MavenProject project;

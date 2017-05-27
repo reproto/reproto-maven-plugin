@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.StringJoiner;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.maven.plugin.logging.Log;
@@ -27,7 +28,14 @@ public class Reproto {
     final Commandline command = new Commandline();
 
     command.setExecutable(executable.toString());
-    command.addArguments(arguments());
+    final List<String> arguments = arguments();
+    command.addArguments(arguments.toArray(new String[0]));
+
+    final StringJoiner joiner = new StringJoiner(" ", "", "");
+    joiner.add(executable.toString());
+    arguments.forEach(joiner::add);
+
+    log.info("Executing: " + joiner.toString());
 
     final int status = CommandLineUtils.executeCommandLine(command, null, output, error);
 
@@ -44,7 +52,7 @@ public class Reproto {
     }
   }
 
-  public String[] arguments() {
+  public List<String> arguments() {
     final List<String> result = new ArrayList<String>();
 
     result.add("compile");
@@ -71,10 +79,11 @@ public class Reproto {
     });
 
     for (final String target : this.targets) {
+      result.add("--package");
       result.add(target);
     }
 
-    return result.toArray(new String[0]);
+    return result;
   }
 
   @RequiredArgsConstructor
