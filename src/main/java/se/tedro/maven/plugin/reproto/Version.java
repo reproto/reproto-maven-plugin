@@ -2,17 +2,21 @@ package se.tedro.maven.plugin.reproto;
 
 import lombok.Data;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Data
 public class Version implements Comparable<Version> {
   private final List<Integer> parts;
 
   public static Version parse(final String version) {
-    final List<Integer> parts = Arrays.stream(version.split("\\.")).map(Integer::parseUnsignedInt).collect(Collectors.toList());
+    final List<Integer> parts = new ArrayList<>();
+
+    for (final String part : version.trim().split("\\.")) {
+      parts.add(Integer.parseUnsignedInt(part));
+    }
+
     return new Version(parts);
   }
 

@@ -1,16 +1,17 @@
 package se.tedro.maven.plugin.reproto;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.StringJoiner;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.maven.plugin.logging.Log;
 import org.codehaus.plexus.util.cli.CommandLineUtils;
 import org.codehaus.plexus.util.cli.Commandline;
 import org.codehaus.plexus.util.cli.StreamConsumer;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.StringJoiner;
 
 @RequiredArgsConstructor
 public class Reproto {
@@ -56,8 +57,6 @@ public class Reproto {
     final List<String> result = new ArrayList<String>();
 
     result.add("compile");
-
-    result.add("--backend");
     result.add("java");
 
     for (final Path path : this.paths) {

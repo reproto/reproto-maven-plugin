@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 
 public class GithubClient {
-  public static final String BASE = "https://api.github.com/";
+  public static final String BASE = "https://api.github.com";
 
   private static final TypeReference<List<GithubRelease>> RELEASES = new TypeReference<List<GithubRelease>>() {
   };
@@ -36,7 +36,7 @@ public class GithubClient {
       releases.add(candidate);
     }
 
-    Collections.sort(releases);
+    releases.sort(Collections.reverseOrder(Version::compareTo));
 
     if (releases.isEmpty()) {
       return null;
