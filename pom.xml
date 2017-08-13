@@ -3,7 +3,7 @@
 
   <groupId>se.tedro.maven.plugins</groupId>
   <artifactId>reproto-maven-plugin</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>maven-plugin</packaging>
 
   <name>reproto</name>
@@ -21,7 +21,7 @@
     <connection>scm:git:git@github.com:reproto/reproto-maven-plugin</connection>
     <developerConnection>scm:git:git@github.com:reproto/reproto-maven-plugin</developerConnection>
     <url>https://github.com/reproto/reproto-maven-plugin</url>
-    <tag>HEAD</tag>
+    <tag>0.1.0</tag>
   </scm>
 
   <developers>
