@@ -1,19 +1,5 @@
 package se.tedro.maven.plugin.reproto;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.PosixFilePermission;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.CompressorException;
@@ -35,12 +21,31 @@ import org.apache.maven.project.MavenProjectHelper;
 import org.apache.maven.repository.RepositorySystem;
 import org.codehaus.plexus.util.StringUtils;
 import org.sonatype.plexus.build.incremental.BuildContext;
+import se.tedro.maven.plugin.reproto.github.GithubClient;
+
+import java.io.*;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public abstract class AbstractReprotoMojo extends AbstractMojo {
+  public static final VersionReq VERSION_REQUIREMENT = VersionReq.create(0, 1);
+
+  public static final long CACHE_TIME_MS = TimeUnit.MINUTES.toMillis(60L);
+
   public static final String DEFAULT_EXECUTABLE = "reproto";
+  public static final String DEFAULT_REPOSITORY = "reproto/reproto";
   public static final String DEFAULT_REPROTO_DOWNLOAD_URL =
       "https://github.com/reproto/reproto/releases/download";
-  public static final String DEFAULT_REPROTO_DOWNLOAD_VERSION = "0.0.7";
 
   @Parameter(defaultValue = "${project}", readonly = true)
   private MavenProject project;
@@ -69,11 +74,11 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
   @Parameter(required = false, property = "reproto.artifact")
   private String artifact;
 
+  @Parameter(required = false, property = "reproto.repository")
+  private String repository = DEFAULT_REPOSITORY;
+
   @Parameter(required = false, property = "reproto.downloadUrl")
   private String downloadUrl = DEFAULT_REPROTO_DOWNLOAD_URL;
-
-  @Parameter(required = false, property = "reproto.downloadVersion")
-  private String downloadVersion = DEFAULT_REPROTO_DOWNLOAD_VERSION;
 
   @Parameter(required = true, readonly = true, property = "localRepository")
   private ArtifactRepository localRepository;
@@ -154,35 +159,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
       return;
     }
 
-    Path executable = null;
-
-    if (this.executable != null) {
-      executable = Paths.get(this.executable).toAbsolutePath();
-
-      if (!Files.isExecutable(executable)) {
-        throw new IllegalArgumentException(
-            "`-D reproto.executable` is not an executable: " + executable);
-      }
-    }
-
-    if (executable == null && artifact != null) {
-      final Artifact artifact = createDependencyArtifact(this.artifact);
-      executable = resolveBinaryArtifact(artifact);
-
-      if (!Files.isExecutable(executable)) {
-        throw new IllegalArgumentException(
-            "`-D reproto.artifact` is not executable: " + executable);
-      }
-    }
-
-    if (executable == null) {
-      executable = resolveDownloadUrl();
-    }
-
-    if (executable == null) {
-      executable = Paths.get(DEFAULT_EXECUTABLE);
-    }
-
+    final Path executable = buildExecutable();
     final Reproto.Builder reproto = new Reproto.Builder(executable, getOutputDirectory());
 
     reproto.path(getSourceRoot());
@@ -209,6 +186,46 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     }
   }
 
+  /**
+   * Build a path to the reproto executable.
+   *
+   * @return an path corresponding to the executable
+   */
+  private Path buildExecutable() throws Exception {
+    final GithubClient githubClient = new GithubClient();
+
+    if (this.executable != null) {
+      final Path executable = Paths.get(this.executable).toAbsolutePath();
+
+      if (!Files.isExecutable(executable)) {
+        throw new IllegalArgumentException(
+            "`-D reproto.executable` is not an executable: " + executable);
+      }
+
+      return executable;
+    }
+
+    if (artifact != null) {
+      final Artifact artifact = createDependencyArtifact(this.artifact);
+      final Path executable = resolveBinaryArtifact(artifact);
+
+      if (!Files.isExecutable(executable)) {
+        throw new IllegalArgumentException(
+            "`-D reproto.artifact` is not executable: " + executable);
+      }
+
+      return executable;
+    }
+
+    final Path downloadExecutable = downloadExecutable(githubClient);
+
+    if (downloadExecutable != null) {
+      return downloadExecutable;
+    }
+
+    return Paths.get(DEFAULT_EXECUTABLE);
+  }
+
   private Artifact createDependencyArtifact(
       final String groupId, final String artifactId, final String version, final String type,
       final String classifier
@@ -232,7 +249,60 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     return createDependencyArtifact(parts[0], parts[1], parts[2], type, classifier);
   }
 
-  private Path resolveDownloadUrl() throws Exception {
+  private Version getLatestVersion(final Path cacheDir, final GithubClient githubClient) throws IOException {
+    final Path path = cacheDir.resolve("version");
+
+    final Version cached = readCachedVersion(path);
+
+    if (cached != null) {
+      return cached;
+    }
+
+    final Version latest = githubClient.getLatestRelease(repository, VERSION_REQUIREMENT);
+
+    if (latest == null) {
+      return null;
+    }
+
+    try {
+      writeLatestVersion(path, latest);
+    } catch (final Exception e) {
+      getLog().warn("Failed to write latest version: " + path, e);
+    }
+
+    return latest;
+  }
+
+  private void writeLatestVersion(Path path, Version latest) throws IOException {
+    getLog().info("Writing version (" + latest + "): " + path);
+
+    try (final OutputStream out = Files.newOutputStream(path)) {
+      final PrintWriter writer = new PrintWriter(out);
+      writer.println(path);
+    }
+  }
+
+  private Version readCachedVersion(final Path path) throws IOException {
+    final long now = System.currentTimeMillis();
+
+    if (Files.isRegularFile(path)) {
+      final long modified = Files.getLastModifiedTime(path).to(TimeUnit.MILLISECONDS);
+      final long diff = Math.max(0L, now - modified);
+
+      if (diff < CACHE_TIME_MS) {
+        try (final InputStream in = Files.newInputStream(path)) {
+          return Version.parse(readString(in));
+        } catch (final Exception e) {
+          getLog().warn("Unable to read file (deleting): " + path, e);
+          Files.delete(path);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private Path downloadExecutable(final GithubClient githubClient) throws Exception {
     final String userHome = System.getProperty("user.home");
 
     if (userHome == null || StringUtils.isBlank(userHome)) {
@@ -243,7 +313,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     final Path cacheDir = home.resolve(".cache").resolve("reproto-maven-plugin");
 
     final String url = this.downloadUrl;
-    final String version = this.downloadVersion;
+    final Version version = this.getLatestVersion(cacheDir, githubClient);
 
     final Path pluginsDirectory = this.pluginsDirectory.toPath();
 
@@ -251,7 +321,7 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
       return null;
     }
 
-    if (version == null || StringUtils.isBlank(version)) {
+    if (version == null) {
       return null;
     }
 
@@ -280,7 +350,6 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     }
 
     final String archiveName = "reproto-" + version + "-" + os + "-" + arch + ".tar.gz";
-
     final String archive = url + "/" + version + "/" + archiveName;
 
     final Path cachedArchive = cacheDir.resolve(archiveName);
@@ -298,6 +367,22 @@ public abstract class AbstractReprotoMojo extends AbstractMojo {
     }
 
     return executable;
+  }
+
+  private String readString(final InputStream in) throws IOException {
+    final byte[] buffer = new byte[4096];
+
+    try (final ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+      while (true) {
+        int read = in.read(buffer);
+
+        if (read <= 0) {
+          return new String(out.toByteArray(), StandardCharsets.UTF_8);
+        }
+
+        out.write(buffer, 0, read);
+      }
+    }
   }
 
   private void extractArchive(final Path source, final Path target)
