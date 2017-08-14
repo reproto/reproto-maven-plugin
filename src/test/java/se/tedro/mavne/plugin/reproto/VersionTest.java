@@ -13,6 +13,11 @@ import static org.junit.Assert.*;
 
 public class VersionTest {
   @Test
+  public void testParse() {
+    assertEquals(VersionReq.create(0, 1), VersionReq.parse("0.1"));
+  }
+
+  @Test
   public void testVersion() {
     assertTrue(VersionReq.create(0, 1).matches(Version.parse("0.1.99")));
     assertFalse(VersionReq.create(0, 1).matches(Version.parse("0.2.99")));

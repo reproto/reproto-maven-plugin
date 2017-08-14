@@ -21,6 +21,7 @@ public class Reproto {
   private final List<String> modules;
   private final List<String> targets;
   private final Optional<String> packagePrefix;
+  private final Optional<Boolean> debug;
 
   public void execute(final Log log) throws Exception {
     final LineConsumer output = new LineConsumer();
@@ -44,7 +45,7 @@ public class Reproto {
       log.info("reproto: " + line);
     }
 
-    for (final String line : output.lines) {
+    for (final String line : error.lines) {
       log.error("reproto: " + line);
     }
 
@@ -55,6 +56,10 @@ public class Reproto {
 
   public List<String> arguments() {
     final List<String> result = new ArrayList<String>();
+
+    if (debug.orElse(false)) {
+      result.add("--debug");
+    }
 
     result.add("compile");
     result.add("java");
@@ -96,6 +101,7 @@ public class Reproto {
     private final List<String> modules = new ArrayList<>();
     private final List<String> targets = new ArrayList<>();
     private Optional<String> packagePrefix = Optional.empty();
+    private Optional<Boolean> debug = Optional.empty();
 
     public Builder path(final Path path) {
       this.paths.add(path);
@@ -117,9 +123,14 @@ public class Reproto {
       return this;
     }
 
+    public Builder debug(final boolean debug) {
+      this.debug = Optional.of(debug);
+      return this;
+    }
+
     public Reproto build() {
       return new Reproto(executable, out, new ArrayList<>(paths), new ArrayList<>(modules),
-          new ArrayList<>(targets), packagePrefix);
+          new ArrayList<>(targets), packagePrefix, debug);
     }
   }
 

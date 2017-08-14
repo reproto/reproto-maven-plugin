@@ -39,14 +39,11 @@ import java.util.concurrent.TimeUnit;
 
 @Mojo(name = "compile", defaultPhase = LifecyclePhase.GENERATE_SOURCES, threadSafe = true)
 public class CompileReprotoMojo extends AbstractMojo {
-  public static final VersionReq VERSION_REQUIREMENT = VersionReq.create(0, 1);
-
+  public static final String DEFAULT_VERSION = "0.1";
   public static final long CACHE_TIME_MS = TimeUnit.MINUTES.toMillis(60L);
 
   public static final String EXECUTABLE = "reproto";
   public static final String DEFAULT_REPOSITORY = "reproto/reproto";
-  public static final String DEFAULT_REPROTO_DOWNLOAD_URL =
-      "https://github.com/reproto/reproto/releases/download";
 
   @Parameter(defaultValue = "${project}", readonly = true)
   private MavenProject project;
@@ -75,8 +72,11 @@ public class CompileReprotoMojo extends AbstractMojo {
   @Parameter(required = false, property = "reproto.repository")
   private String repository = DEFAULT_REPOSITORY;
 
-  @Parameter(required = false, property = "reproto.downloadUrl")
-  private String downloadUrl = DEFAULT_REPROTO_DOWNLOAD_URL;
+  @Parameter(required = false, property = "reproto.version")
+  private String version = DEFAULT_VERSION;
+
+  @Parameter(required = false, property = "reproto.debug")
+  private boolean debug = false;
 
   @Parameter(required = true, readonly = true, property = "localRepository")
   private ArtifactRepository localRepository;
@@ -158,6 +158,8 @@ public class CompileReprotoMojo extends AbstractMojo {
     final Path outputDirectory = this.outputDirectory.toPath();
     final Reproto.Builder reproto = new Reproto.Builder(executable, outputDirectory);
 
+    reproto.debug(debug);
+
     reproto.path(this.reprotoSourceRoot.toPath());
 
     for (final String module : modules) {
@@ -217,7 +219,8 @@ public class CompileReprotoMojo extends AbstractMojo {
       return cached;
     }
 
-    final Version latest = githubClient.getLatestRelease(repository, VERSION_REQUIREMENT);
+    final VersionReq req = VersionReq.parse(version);
+    final Version latest = githubClient.getLatestRelease(repository, req);
 
     if (latest == null) {
       return null;
@@ -273,14 +276,9 @@ public class CompileReprotoMojo extends AbstractMojo {
     final Path home = Paths.get(userHome);
     final Path cacheDir = home.resolve(".cache").resolve("reproto-maven-plugin");
 
-    final String url = this.downloadUrl;
     final Version version = this.getLatestVersion(cacheDir, githubClient);
 
     final Path pluginsDirectory = this.pluginsDirectory.toPath();
-
-    if (url == null || StringUtils.isBlank(url)) {
-      return null;
-    }
 
     if (version == null) {
       return null;
@@ -312,7 +310,7 @@ public class CompileReprotoMojo extends AbstractMojo {
     }
 
     final String archiveName = "reproto-" + version + "-" + os + "-" + arch + ".tar.gz";
-    final String archive = url + "/" + version + "/" + archiveName;
+    final String archive = githubClient.downloadUrl(repository, version, archiveName);
 
     final Path cachedArchive = cacheDir.resolve(archiveName);
 

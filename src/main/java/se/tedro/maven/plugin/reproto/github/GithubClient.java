@@ -12,7 +12,8 @@ import java.util.Collections;
 import java.util.List;
 
 public class GithubClient {
-  public static final String BASE = "https://api.github.com";
+  public static final String API_BASE = "https://api.github.com";
+  public static final String BASE = "https://github.com";
 
   private static final TypeReference<List<GithubRelease>> RELEASES = new TypeReference<List<GithubRelease>>() {
   };
@@ -20,7 +21,7 @@ public class GithubClient {
   private final ObjectMapper mapper = new ObjectMapper();
 
   public Version getLatestRelease(final String repo, final VersionReq req) throws IOException {
-    final String url = BASE + "/repos/" + repo + "/releases";
+    final String url = API_BASE + "/repos/" + repo + "/releases";
 
     final List<GithubRelease> githubReleases = mapper.readValue(new URL(url), RELEASES);
 
@@ -43,5 +44,9 @@ public class GithubClient {
     }
 
     return releases.get(0);
+  }
+
+  public String downloadUrl(final String repo, final Version version, final String file) {
+    return BASE + "/" + repo + "/releases/download/" + version + "/" + file;
   }
 }
