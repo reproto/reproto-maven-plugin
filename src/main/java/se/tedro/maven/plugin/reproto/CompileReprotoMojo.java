@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
 
 @Mojo(name = "compile", defaultPhase = LifecyclePhase.GENERATE_SOURCES, threadSafe = true)
 public class CompileReprotoMojo extends AbstractMojo {
-  public static final String DEFAULT_VERSION = "0.1";
+  public static final String DEFAULT_VERSION = "0.2";
   public static final long CACHE_TIME_MS = TimeUnit.MINUTES.toMillis(60L);
 
   public static final String EXECUTABLE = "reproto";
