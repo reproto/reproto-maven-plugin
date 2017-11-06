@@ -69,16 +69,6 @@
         <version>0.0.1-SNAPSHOT</version>
         <extensions>true</extensions>
 
-        <configuration>
-          <targets>
-            <target>api.v1</target>
-          </targets>
-          <modules>
-            <module>fasterxml</module>
-            <module>builder</module>
-          </modules>
-        </configuration>
-
         <executions>
           <execution>
             <goals>

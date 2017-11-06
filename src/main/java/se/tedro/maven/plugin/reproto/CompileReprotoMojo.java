@@ -88,13 +88,13 @@ public class CompileReprotoMojo extends AbstractMojo {
   /**
    * When {@code true}, skip the execution.
    */
-  @Parameter(required = false, property = "reproto.skip", defaultValue = "false")
+  @Parameter(property = "reproto.skip", defaultValue = "false")
   private boolean skip;
 
   /**
    * A directory where native launchers for java protoc plugins will be generated.
    */
-  @Parameter(required = false, defaultValue = "${project.build.directory}/reproto-plugins")
+  @Parameter(defaultValue = "${project.build.directory}/reproto-plugins")
   private File pluginsDirectory;
 
   /**
@@ -107,25 +107,28 @@ public class CompileReprotoMojo extends AbstractMojo {
   /**
    * Packages to compile.
    */
-  @Parameter(required = true)
+  @Parameter()
   private Set<String> targets = Collections.emptySet();
 
   /**
    * Modules to enable.
    */
-  @Parameter(required = false)
+  @Parameter()
   private List<String> modules = Collections.emptyList();
 
-  @Parameter(required = true,
-      defaultValue = "${project.build.directory}/generated-sources/reproto/java")
-  private File outputDirectory;
+  @Parameter(
+      required = true,
+      defaultValue = "${project.build.directory}/generated-sources/reproto/java",
+      property = "reproto.output"
+  )
+  private File output;
 
-  @Parameter(required = true,
-      defaultValue = "${project.build.directory}/reproto.toml", property = "reproto.manifest")
+  @Parameter(
+      required = true,
+      defaultValue = "${project.basedir}/reproto.toml",
+      property = "reproto.manifest"
+  )
   private File manifest;
-
-  @Parameter(required = true, defaultValue = "${basedir}/src/main/reproto")
-  private File reprotoSourceRoot;
 
   /**
    * Check if execution should be skipped.
@@ -159,13 +162,11 @@ public class CompileReprotoMojo extends AbstractMojo {
     }
 
     final Path executable = buildExecutable();
-    final Path outputDirectory = this.outputDirectory.toPath();
+    final Path outputDirectory = this.output.toPath();
     final Path manifest = this.manifest.toPath();
     final Reproto.Builder reproto = new Reproto.Builder(executable, outputDirectory, manifest);
 
     reproto.debug(debug);
-
-    reproto.path(this.reprotoSourceRoot.toPath());
 
     for (final String module : modules) {
       reproto.module(module);

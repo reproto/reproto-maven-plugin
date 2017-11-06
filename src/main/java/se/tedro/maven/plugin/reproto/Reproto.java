@@ -16,8 +16,9 @@ import java.util.StringJoiner;
 @RequiredArgsConstructor
 public class Reproto {
   private final Path executable;
-  private final Path manifest;
   private final Path out;
+  private final Path manifest;
+
   private final List<Path> paths;
   private final List<String> modules;
   private final List<String> targets;

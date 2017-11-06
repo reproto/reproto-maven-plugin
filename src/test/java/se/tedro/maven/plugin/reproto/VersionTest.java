@@ -1,4 +1,4 @@
-package se.tedro.mavne.plugin.reproto;
+package se.tedro.maven.plugin.reproto;
 
 import com.google.common.collect.ImmutableList;
 import org.junit.Test;

@@ -1,0 +1,6 @@
+language = "java"
+presets = ["maven"]
+modules = ["fasterxml", "builder"]
+
+[packages]
+"api.v1" = "*"
