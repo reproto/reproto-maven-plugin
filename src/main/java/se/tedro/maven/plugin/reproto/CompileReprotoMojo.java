@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
 
 @Mojo(name = "compile", defaultPhase = LifecyclePhase.GENERATE_SOURCES, threadSafe = true)
 public class CompileReprotoMojo extends AbstractMojo {
-  public static final String DEFAULT_VERSION = "0.2";
+  public static final String DEFAULT_VERSION = "0.3";
   public static final long CACHE_TIME_MS = TimeUnit.MINUTES.toMillis(60L);
 
   public static final String EXECUTABLE = "reproto";
@@ -120,6 +120,10 @@ public class CompileReprotoMojo extends AbstractMojo {
       defaultValue = "${project.build.directory}/generated-sources/reproto/java")
   private File outputDirectory;
 
+  @Parameter(required = true,
+      defaultValue = "${project.build.directory}/reproto.toml", property = "reproto.manifest")
+  private File manifest;
+
   @Parameter(required = true, defaultValue = "${basedir}/src/main/reproto")
   private File reprotoSourceRoot;
 
@@ -156,7 +160,8 @@ public class CompileReprotoMojo extends AbstractMojo {
 
     final Path executable = buildExecutable();
     final Path outputDirectory = this.outputDirectory.toPath();
-    final Reproto.Builder reproto = new Reproto.Builder(executable, outputDirectory);
+    final Path manifest = this.manifest.toPath();
+    final Reproto.Builder reproto = new Reproto.Builder(executable, outputDirectory, manifest);
 
     reproto.debug(debug);
 

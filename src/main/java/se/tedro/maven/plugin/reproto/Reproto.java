@@ -16,6 +16,7 @@ import java.util.StringJoiner;
 @RequiredArgsConstructor
 public class Reproto {
   private final Path executable;
+  private final Path manifest;
   private final Path out;
   private final List<Path> paths;
   private final List<String> modules;
@@ -61,8 +62,12 @@ public class Reproto {
       result.add("--debug");
     }
 
-    result.add("compile");
+    result.add("build");
+    result.add("--lang");
     result.add("java");
+
+    result.add("--manifest-path");
+    result.add(manifest.toAbsolutePath().toString());
 
     for (final Path path : this.paths) {
       result.add("--path");
@@ -96,6 +101,8 @@ public class Reproto {
     private final Path executable;
     @NonNull
     private final Path out;
+    @NonNull
+    private final Path manifest;
 
     private final List<Path> paths = new ArrayList<>();
     private final List<String> modules = new ArrayList<>();
@@ -129,7 +136,7 @@ public class Reproto {
     }
 
     public Reproto build() {
-      return new Reproto(executable, out, new ArrayList<>(paths), new ArrayList<>(modules),
+      return new Reproto(executable, out, manifest, new ArrayList<>(paths), new ArrayList<>(modules),
           new ArrayList<>(targets), packagePrefix, debug);
     }
   }
