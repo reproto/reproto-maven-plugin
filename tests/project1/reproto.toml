@@ -1,6 +1,8 @@
 language = "java"
 presets = ["maven"]
-modules = ["fasterxml", "builder"]
+
+[modules.jackson]
+[modules.builder]
 
 [packages]
 "api.v1" = "*"

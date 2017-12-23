@@ -8,17 +8,17 @@ import java.util.Iterator;
 import java.util.List;
 
 @Data
-public class VersionReq {
+public class Range {
   private final List<Integer> parts;
 
-  public static VersionReq parse(final String version) {
+  public static Range parse(final String version) {
     final List<Integer> parts = new ArrayList<>();
 
     for (final String part : version.trim().split("\\.")) {
       parts.add(Integer.parseUnsignedInt(part));
     }
 
-    return new VersionReq(parts);
+    return new Range(parts);
   }
 
   public boolean matches(final Version version) {
@@ -40,15 +40,15 @@ public class VersionReq {
     return true;
   }
 
-  public static VersionReq create(int a) {
-    return new VersionReq(ImmutableList.of(a));
+  public static Range create(int a) {
+    return new Range(ImmutableList.of(a));
   }
 
-  public static VersionReq create(int a, int b) {
-    return new VersionReq(ImmutableList.of(a, b));
+  public static Range create(int a, int b) {
+    return new Range(ImmutableList.of(a, b));
   }
 
-  public static VersionReq create(int a, int b, int c) {
-    return new VersionReq(ImmutableList.of(a, b, c));
+  public static Range create(int a, int b, int c) {
+    return new Range(ImmutableList.of(a, b, c));
   }
 }

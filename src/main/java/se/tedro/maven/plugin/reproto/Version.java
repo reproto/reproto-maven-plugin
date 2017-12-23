@@ -1,5 +1,7 @@
 package se.tedro.maven.plugin.reproto;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -10,6 +12,7 @@ import java.util.List;
 public class Version implements Comparable<Version> {
   private final List<Integer> parts;
 
+  @JsonCreator
   public static Version parse(final String version) {
     final List<Integer> parts = new ArrayList<>();
 
@@ -20,6 +23,7 @@ public class Version implements Comparable<Version> {
     return new Version(parts);
   }
 
+  @JsonValue
   public String toString() {
     final StringBuilder builder = new StringBuilder();
 

@@ -2,8 +2,6 @@ package se.tedro.maven.plugin.reproto;
 
 import com.google.common.collect.ImmutableList;
 import org.junit.Test;
-import se.tedro.maven.plugin.reproto.Version;
-import se.tedro.maven.plugin.reproto.VersionReq;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,13 +12,13 @@ import static org.junit.Assert.*;
 public class VersionTest {
   @Test
   public void testParse() {
-    assertEquals(VersionReq.create(0, 1), VersionReq.parse("0.1"));
+    assertEquals(Range.create(0, 1), Range.parse("0.1"));
   }
 
   @Test
   public void testVersion() {
-    assertTrue(VersionReq.create(0, 1).matches(Version.parse("0.1.99")));
-    assertFalse(VersionReq.create(0, 1).matches(Version.parse("0.2.99")));
+    assertTrue(Range.create(0, 1).matches(Version.parse("0.1.99")));
+    assertFalse(Range.create(0, 1).matches(Version.parse("0.2.99")));
   }
 
   @Test

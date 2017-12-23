@@ -1,5 +1,7 @@
 package se.tedro.maven.plugin.reproto;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Data;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.compressors.CompressorException;
@@ -21,11 +23,13 @@ import org.apache.maven.project.MavenProjectHelper;
 import org.apache.maven.repository.RepositorySystem;
 import org.codehaus.plexus.util.StringUtils;
 import org.sonatype.plexus.build.incremental.BuildContext;
-import se.tedro.maven.plugin.reproto.github.GithubClient;
+import se.tedro.maven.plugin.reproto.gcs.GcsClient;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -44,6 +48,8 @@ public class CompileReprotoMojo extends AbstractMojo {
 
   public static final String EXECUTABLE = "reproto";
   public static final String DEFAULT_REPOSITORY = "reproto/reproto";
+
+  private static final ObjectMapper mapper = new ObjectMapper();
 
   @Parameter(defaultValue = "${project}", readonly = true)
   private MavenProject project;
@@ -194,7 +200,7 @@ public class CompileReprotoMojo extends AbstractMojo {
    * @return an path corresponding to the executable
    */
   private Path buildExecutable() throws Exception {
-    final GithubClient githubClient = new GithubClient();
+    final GcsClient gcsClient = new GcsClient();
 
     if (this.executable != null) {
       final Path executable = Paths.get(this.executable).toAbsolutePath();
@@ -207,7 +213,7 @@ public class CompileReprotoMojo extends AbstractMojo {
       return executable;
     }
 
-    final Path downloadExecutable = downloadExecutable(githubClient);
+    final Path downloadExecutable = downloadExecutable(gcsClient);
 
     if (downloadExecutable != null) {
       return downloadExecutable;
@@ -216,63 +222,60 @@ public class CompileReprotoMojo extends AbstractMojo {
     return Paths.get(EXECUTABLE);
   }
 
-  private Version getLatestVersion(final Path cacheDir, final GithubClient githubClient) throws IOException {
+  private Version getLatestVersion(final Path cacheDir, final GcsClient gcsClient) throws IOException {
     final Path path = cacheDir.resolve("version");
 
-    final Version cached = readCachedVersion(path);
+    final String etag;
+    final Cached cached = readCachedRelease(path);
 
-    if (cached != null) {
-      return cached;
+    if (!cached.isExpired()) {
+      return cached.getRelease().getVersion();
     }
 
-    final VersionReq req = VersionReq.parse(version);
-    final Version latest = githubClient.getLatestRelease(repository, req);
-
-    if (latest == null) {
-      return null;
-    }
+    final Range req = Range.parse(version);
+    final GcsClient.Release release = gcsClient.getLatestRelease(cached.getRelease(), req);
 
     try {
-      writeLatestVersion(path, latest);
+      writeLatestVersion(path, release);
     } catch (final Exception e) {
       getLog().warn("Failed to write latest version: " + path, e);
     }
 
-    return latest;
+    return release.getVersion();
   }
 
-  private void writeLatestVersion(final Path path, final Version latest) throws IOException {
-    getLog().info("Writing version (" + latest + "): " + path);
+  private void writeLatestVersion(final Path path, final GcsClient.Release release) throws IOException {
+    getLog().info("Writing version (" + release + "): " + path);
 
-    try (final PrintWriter out = new PrintWriter(Files.newOutputStream(path))) {
-      out.println(latest);
+    try (final OutputStream out = Files.newOutputStream(path)) {
+      mapper.writeValue(out, release);
     }
   }
 
-  private Version readCachedVersion(final Path path) throws IOException {
+  private Cached readCachedRelease(final Path path) throws IOException {
     final long now = System.currentTimeMillis();
 
     if (!Files.isRegularFile(path)) {
-      return null;
+      return new Cached(null, true);
     }
 
     final long modified = Files.getLastModifiedTime(path).to(TimeUnit.MILLISECONDS);
     final long diff = Math.max(0L, now - modified);
 
-    if (diff >= CACHE_TIME_MS) {
-      return null;
-    }
+    final GcsClient.Release release;
 
     try (final InputStream in = Files.newInputStream(path)) {
-      return Version.parse(readString(in));
+      release = mapper.readValue(in, GcsClient.Release.class);
     } catch (final Exception e) {
       getLog().warn("Unable to read file (deleting): " + path, e);
       Files.delete(path);
-      return null;
+      return new Cached(null, true);
     }
+
+    return new Cached(release, diff >= CACHE_TIME_MS);
   }
 
-  private Path downloadExecutable(final GithubClient githubClient) throws Exception {
+  private Path downloadExecutable(final GcsClient gcsClient) throws Exception {
     final String userHome = System.getProperty("user.home");
 
     if (userHome == null || StringUtils.isBlank(userHome)) {
@@ -282,7 +285,7 @@ public class CompileReprotoMojo extends AbstractMojo {
     final Path home = Paths.get(userHome);
     final Path cacheDir = home.resolve(".cache").resolve("reproto-maven-plugin");
 
-    final Version version = this.getLatestVersion(cacheDir, githubClient);
+    final Version version = this.getLatestVersion(cacheDir, gcsClient);
 
     final Path pluginsDirectory = this.pluginsDirectory.toPath();
 
@@ -316,7 +319,7 @@ public class CompileReprotoMojo extends AbstractMojo {
     }
 
     final String archiveName = "reproto-" + version + "-" + os + "-" + arch + ".tar.gz";
-    final String archive = githubClient.downloadUrl(repository, version, archiveName);
+    final String archive = gcsClient.downloadUrl(archiveName);
 
     final Path cachedArchive = cacheDir.resolve(archiveName);
 
@@ -333,22 +336,6 @@ public class CompileReprotoMojo extends AbstractMojo {
     }
 
     return executable;
-  }
-
-  private String readString(final InputStream in) throws IOException {
-    final byte[] buffer = new byte[4096];
-
-    try (final ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      while (true) {
-        int read = in.read(buffer);
-
-        if (read <= 0) {
-          return new String(out.toByteArray(), StandardCharsets.UTF_8);
-        }
-
-        out.write(buffer, 0, read);
-      }
-    }
   }
 
   private void extractArchive(final Path source, final Path target, final String executableName)
@@ -550,5 +537,11 @@ public class CompileReprotoMojo extends AbstractMojo {
     }
 
     return targetFile;
+  }
+
+  @Data
+  private static class Cached {
+    private final GcsClient.Release release;
+    private final boolean expired;
   }
 }

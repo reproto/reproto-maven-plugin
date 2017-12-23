@@ -1,25 +1,21 @@
 tuple TupleTest {
-  timestamp: unsigned;
+  timestamp: u32;
   value: string;
 }
 
-enum EnumTest: string {
-    ONE = "one";
-    TWO = "two";
+enum EnumTest as string {
+    One as "one";
+    Two as "two";
 }
 
 interface InterfaceTest {
-  Absolute {
-    name "absolute";
-
-    start: unsigned;
-    end: unsigned;
+  Absolute as "absolute" {
+    start: u32;
+    end: u32;
   }
 
-  Relative {
-    name "relative";
-
-    value: unsigned;
+  Relative as "relative" {
+    value: u32;
   }
 }
 
