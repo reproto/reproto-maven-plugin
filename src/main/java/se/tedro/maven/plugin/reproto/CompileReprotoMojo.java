@@ -225,7 +225,6 @@ public class CompileReprotoMojo extends AbstractMojo {
   private Version getLatestVersion(final Path cacheDir, final GcsClient gcsClient) throws IOException {
     final Path path = cacheDir.resolve("version");
 
-    final String etag;
     final Cached cached = readCachedRelease(path);
 
     if (!cached.isExpired()) {
@@ -245,6 +244,13 @@ public class CompileReprotoMojo extends AbstractMojo {
   }
 
   private void writeLatestVersion(final Path path, final GcsClient.Release release) throws IOException {
+    final Path parent = path.getParent();
+
+    if (!Files.isDirectory(parent)) {
+      getLog().info("Creating directory: " + parent);
+      Files.createDirectories(parent);
+    }
+
     getLog().info("Writing version (" + release + "): " + path);
 
     try (final OutputStream out = Files.newOutputStream(path)) {
@@ -301,12 +307,6 @@ public class CompileReprotoMojo extends AbstractMojo {
     final String executableName = String.format("%s-%s", EXECUTABLE, version);
     final Path executable = pluginsDirectory.resolve(executableName);
 
-    // file already exists
-    if (Files.isExecutable(executable)) {
-      getLog().info("Using existing (cached) executable: " + executable);
-      return executable;
-    }
-
     final String os = resolveOs();
     final String arch = resolveArch();
 
@@ -319,12 +319,19 @@ public class CompileReprotoMojo extends AbstractMojo {
     }
 
     final String archiveName = "reproto-" + version + "-" + os + "-" + arch + ".tar.gz";
+
     final String archive = gcsClient.downloadUrl(archiveName);
 
     final Path cachedArchive = cacheDir.resolve(archiveName);
 
     if (!Files.isRegularFile(cachedArchive)) {
       downloadToCache(archive, cachedArchive);
+    }
+
+    // file already exists
+    if (Files.isExecutable(executable)) {
+      getLog().info("Using existing (cached) executable: " + executable);
+      return executable;
     }
 
     extractArchive(cachedArchive, pluginsDirectory, executableName);
