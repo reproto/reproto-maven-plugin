@@ -1,8 +1,8 @@
 language = "java"
-presets = ["maven"]
 
 [modules.jackson]
 [modules.builder]
+[presets.maven]
 
 [packages]
 "api.v1" = "*"
